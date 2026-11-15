@@ -1,0 +1,110 @@
+# Builds BerriAI/lens at the commit in upstream.env (deploy/runtime/Dockerfile,
+# default target `runtime`) and pushes it to ghcr.io/2stacks/lens.
+# PRs: build + smoke test only (nothing is pushed).
+# main: build, smoke test, push tags <VERSION> and <VERSION>-<sha7>, sign the
+# digest with cosign (keyless, GitHub OIDC).
+name: build
+
+on:
+  pull_request:
+    paths:
+      - upstream.env
+      - .github/workflows/build.yml
+  push:
+    branches: [main]
+    paths:
+      - upstream.env
+      - .github/workflows/build.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/2stacks/lens
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write   # push to GHCR (main only)
+      id-token: write   # cosign keyless signing (main only)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the upstream commit and its VERSION
+        id: v
+        run: |
+          commit=$(sed -nE 's/^LENS_COMMIT=([0-9a-f]{40})$/\1/p' upstream.env)
+          test -n "$commit" || { echo "::error::LENS_COMMIT missing or not a full sha"; exit 1; }
+          version=$(curl -fsSL "https://raw.githubusercontent.com/BerriAI/lens/$commit/VERSION" | tr -d '[:space:]')
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$' || { echo "::error::odd VERSION '$version'"; exit 1; }
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "short=${commit:0:7}" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "BerriAI/lens $commit, VERSION $version"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push on main)
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: https://github.com/BerriAI/lens.git#${{ steps.v.outputs.commit }}
+          file: deploy/runtime/Dockerfile
+          build-args: LENS_VERSION=${{ steps.v.outputs.version }}
+          platforms: linux/amd64
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.v.outputs.version }}-${{ steps.v.outputs.short }}
+            ${{ env.IMAGE }}:${{ steps.v.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}-${{ steps.v.outputs.short }}
+            org.opencontainers.image.description=BerriAI Lens ${{ steps.v.outputs.version }} built from BerriAI/lens@${{ steps.v.outputs.commit }}
+            org.opencontainers.image.licenses=MIT
+            dev.2stacks.upstream.commit=${{ steps.v.outputs.commit }}
+
+      - name: Smoke test (binaries start and report the version)
+        run: |
+          ref="${IMAGE}:${{ steps.v.outputs.version }}"
+          [ "${{ github.event_name }}" = pull_request ] || ref="${IMAGE}@${{ steps.build.outputs.digest }}"
+          out=$(docker run --rm --entrypoint /usr/local/bin/litellm-lens "$ref" --version)
+          echo "$out"
+          echo "$out" | grep -q "${{ steps.v.outputs.version }}"
+          docker run --rm --entrypoint /usr/local/bin/node "$ref" --version
+
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: github.event_name != 'pull_request'
+
+      - name: Sign the digest (keyless)
+        if: github.event_name != 'pull_request'
+        run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${IMAGE}"
+            echo "- BerriAI/lens \`${{ steps.v.outputs.commit }}\`, VERSION ${{ steps.v.outputs.version }}"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- Pushed: ${{ github.event_name != 'pull_request' }}"
+          } >> "$GITHUB_STEP_SUMMARY"

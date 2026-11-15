@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Upstream BerriAI/lens commit (upstream.env) and the workflow's actions. Merging a LENS_COMMIT bump rebuilds and pushes ghcr.io/2stacks/lens; the stack that uses it gets its PR in its own repo. Lens is pre-release and pairs with LiteLLM: read the compare link and check compatibility with the running LiteLLM and ClickHouse before merging.",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "America/New_York",
+  "schedule": [
+    "before 6am on saturday"
+  ],
+  "packageRules": [
+    {
+      "description": "Upstream commit bumps wait for a Dependency Dashboard tick: Lens main moves daily and every bump needs a compatibility review",
+      "matchPackageNames": [
+        "https://github.com/BerriAI/lens"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Major version bumps need a tick on the Dependency Dashboard first",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "BerriAI/lens commit to build (branch main, pinned by full sha)",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^upstream\\.env$/"
+      ],
+      "matchStrings": [
+        "LENS_REF=(?<currentValue>\\S+)\\nLENS_COMMIT=(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "depNameTemplate": "https://github.com/BerriAI/lens",
+      "datasourceTemplate": "git-refs"
+    }
+  ]
+}
