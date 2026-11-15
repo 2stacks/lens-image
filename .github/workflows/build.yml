@@ -37,6 +37,8 @@ jobs:
       id-token: write   # cosign keyless signing (main only)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # don't leave the job token in .git/config
 
       - name: Read the upstream commit and its VERSION
         id: v
