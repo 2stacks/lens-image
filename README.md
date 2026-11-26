@@ -29,10 +29,10 @@ default baseline x86-64 target, so the binaries run on CPUs without AVX2.
 
 ## Updating
 
-Renovate watches BerriAI/lens `main` and lists commit bumps on the Dependency
-Dashboard; they wait for a tick. Lens is pre-release and pairs with LiteLLM
-versions: read the compare link (migrations, ClickHouse schema, API changes)
-before merging.
+Renovate watches BerriAI/lens `main` and opens a commit-bump PR on Saturday
+(each Renovate PR requests a review from `2stacks`, which sends the mail).
+Lens is pre-release and pairs with LiteLLM versions: read the compare link
+(migrations, ClickHouse schema, API changes) before merging.
 
 When BerriAI publishes `ghcr.io/berriai/lens`, switch to it and archive this
 repo.
