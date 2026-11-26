@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Upstream BerriAI/lens commit (upstream.env) and the workflow's actions. Merging a LENS_COMMIT bump rebuilds and pushes ghcr.io/2stacks/lens; the stack that uses it gets its PR in its own repo. Lens is pre-release and pairs with LiteLLM: read the compare link and check compatibility with the running LiteLLM and ClickHouse before merging.",
+  "description": "Upstream BerriAI/lens commit (upstream.env) and the workflow's actions. Merging a LENS_COMMIT bump rebuilds and pushes ghcr.io/2stacks/lens; the stack that uses it gets its PR in its own repo. Lens is pre-release and pairs with LiteLLM: read the compare link and check compatibility with the running LiteLLM and ClickHouse before merging. Every PR requests a review from 2stacks, which is how the owner gets mail (Dashboard edits send none); nothing waits for Dashboard approval.",
   "extends": [
     "config:recommended",
     ":dependencyDashboard",
@@ -10,20 +10,27 @@
   "schedule": [
     "before 6am on saturday"
   ],
+  "reviewers": [
+    "2stacks"
+  ],
   "packageRules": [
     {
-      "description": "Upstream commit bumps wait for a Dependency Dashboard tick: Lens main moves daily and every bump needs a compatibility review",
+      "description": "Upstream commit bumps: Lens main moves daily, the Saturday schedule keeps it to one PR a week. Every bump needs a compatibility review (warning in the body)",
       "matchPackageNames": [
         "https://github.com/BerriAI/lens"
       ],
-      "dependencyDashboardApproval": true
+      "prBodyNotes": [
+        "**Lens commit bump:** Lens is pre-release and pairs with LiteLLM. Read the compare link (migrations, ClickHouse schema, API changes) and check it fits the running LiteLLM and ClickHouse before merging. Don't want it? Close the PR."
+      ]
     },
     {
-      "description": "Major version bumps need a tick on the Dependency Dashboard first",
+      "description": "Major version bumps: a PR like any other (a review request mails the owner), with a warning in the body",
       "matchUpdateTypes": [
         "major"
       ],
-      "dependencyDashboardApproval": true
+      "prBodyNotes": [
+        "**Major version:** read the upgrade guide and every breaking change before merging; the build must pass. Don't want it? Close the PR: Renovate skips this major until a newer one appears."
+      ]
     }
   ],
   "customManagers": [
